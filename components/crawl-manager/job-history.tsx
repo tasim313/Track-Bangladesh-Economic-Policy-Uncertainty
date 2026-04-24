@@ -30,6 +30,13 @@ const statusConfig = {
     icon: Clock,
     label: 'Pending',
   },
+  [CrawlJobStatus.PAUSED]: {
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/20',
+    text: 'text-amber-400',
+    icon: Clock,
+    label: 'Paused',
+  },
   [CrawlJobStatus.RUNNING]: {
     bg: 'bg-blue-500/10',
     border: 'border-blue-500/20',

@@ -1,16 +1,17 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { signIn } from 'next-auth/react'
 import { toast } from 'sonner'
 import { Loader2, LockKeyhole, Mail, UserRound } from 'lucide-react'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { useAuthStore } from '@/stores/auth-store'
 
 const schema = z
   .object({
@@ -27,6 +28,8 @@ const schema = z
 type FormValues = z.infer<typeof schema>
 
 export default function SignUpPage() {
+  const router = useRouter()
+  const setAuth = useAuthStore((state) => state.setAuth)
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -52,11 +55,48 @@ export default function SignUpPage() {
     }
 
     toast.success('Account created successfully.')
-    await signIn('credentials', {
-      email: values.email,
-      password: values.password,
-      callbackUrl: '/',
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
+    const loginResponse = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/auth/token/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: values.email,
+        username: values.email,
+        password: values.password,
+      }),
     })
+    const loginPayload = (await loginResponse.json().catch(() => ({}))) as {
+      access?: string
+      refresh?: string
+      expires_in?: number
+      access_expires_in?: number
+      user?: { id?: string; email?: string; name?: string; full_name?: string }
+    }
+
+    if (loginResponse.ok && loginPayload.access) {
+      const expiresIn = Number(loginPayload.expires_in ?? loginPayload.access_expires_in ?? 1800)
+      setAuth({
+        accessToken: loginPayload.access,
+        refreshToken: loginPayload.refresh,
+        accessTokenExpires: Date.now() + expiresIn * 1000,
+        user: loginPayload.user
+          ? {
+              id: loginPayload.user.id,
+              email: loginPayload.user.email ?? values.email,
+              name: loginPayload.user.name,
+              fullName: loginPayload.user.full_name,
+            }
+          : {
+              email: values.email,
+              name: values.email.split('@')[0],
+              fullName: values.email.split('@')[0],
+            },
+      })
+      router.push('/')
+      return
+    }
+
+    router.push('/auth/signin')
   })
 
   return (

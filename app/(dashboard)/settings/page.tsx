@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { APIConfig } from '@/components/settings/api-config'
 import { CrawlSettings } from '@/components/settings/crawl-settings'
 import { DataRetention } from '@/components/settings/data-retention'
+import { NewsSources } from '@/components/settings/news-sources'
 import { UserPreferences } from '@/components/settings/user-preferences'
 import { Save, AlertCircle } from 'lucide-react'
 
@@ -56,6 +57,9 @@ export default function SettingsPage() {
 
         {/* Data Retention */}
         <DataRetention />
+
+        {/* News Sources */}
+        <NewsSources />
 
         {/* User Preferences */}
         <UserPreferences />

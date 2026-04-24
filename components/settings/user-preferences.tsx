@@ -71,7 +71,7 @@ export function UserPreferences() {
           <div className="flex gap-3 items-center">
             <Input
               type="number"
-              value="75"
+              defaultValue="75"
               className="bg-secondary/50 border-border text-foreground w-24"
             />
             <span className="text-sm text-muted-foreground">When EPU exceeds this value</span>

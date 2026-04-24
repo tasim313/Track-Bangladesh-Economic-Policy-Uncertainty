@@ -1,19 +1,32 @@
-import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+'use client'
+
+import { useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { AppHeader } from '@/components/app-header'
 import { AppSidebar } from '@/components/app-sidebar'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { useAuthStore } from '@/stores/auth-store'
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession(authOptions)
+  const router = useRouter()
+  const pathname = usePathname()
+  const accessToken = useAuthStore((state) => state.accessToken)
+  const isHydrated = useAuthStore((state) => state.isHydrated)
 
-  if (!session) {
-    redirect('/auth/signin')
+  useEffect(() => {
+    if (!isHydrated) return
+
+    if (!accessToken) {
+      router.replace(`/auth/signin?callbackUrl=${encodeURIComponent(pathname || '/')}`)
+    }
+  }, [accessToken, isHydrated, pathname, router])
+
+  if (!isHydrated || !accessToken) {
+    return <div className="p-6 text-sm text-muted-foreground">Checking authentication...</div>
   }
 
   return (

@@ -19,6 +19,10 @@ const copy: Record<string, { title: string; subtitle: string }> = {
     title: 'Data Explorer',
     subtitle: 'Search the unified article dataset and export filtered research slices.',
   },
+  '/analytics': {
+    title: 'Analytics',
+    subtitle: 'Track EPU trends and keyword article-count output across sources.',
+  },
   '/keywords': {
     title: 'Keywords',
     subtitle: 'Curate the bilingual E/P/U lexicon used across crawl jobs.',

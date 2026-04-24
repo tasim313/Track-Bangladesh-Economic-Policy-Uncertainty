@@ -9,6 +9,9 @@ import { Copy, Eye, EyeOff } from 'lucide-react'
 export function APIConfig() {
   const [showKey, setShowKey] = useState(false)
   const [apiKey, setApiKey] = useState('sk_prod_1234567890abcdef')
+  const [baseUrl, setBaseUrl] = useState('https://api.example.com')
+  const [requestTimeout, setRequestTimeout] = useState('30')
+  const [maxRetries, setMaxRetries] = useState('3')
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(apiKey)
@@ -59,7 +62,8 @@ export function APIConfig() {
         <div>
           <label className="text-sm font-medium text-foreground block mb-2">Base URL</label>
           <Input
-            value="https://api.example.com"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
             className="bg-secondary/50 border-border text-foreground"
             placeholder="https://api.example.com"
           />
@@ -76,7 +80,8 @@ export function APIConfig() {
             </label>
             <Input
               type="number"
-              value="30"
+              value={requestTimeout}
+              onChange={(e) => setRequestTimeout(e.target.value)}
               className="bg-secondary/50 border-border text-foreground"
             />
           </div>
@@ -87,7 +92,8 @@ export function APIConfig() {
             </label>
             <Input
               type="number"
-              value="3"
+              value={maxRetries}
+              onChange={(e) => setMaxRetries(e.target.value)}
               className="bg-secondary/50 border-border text-foreground"
             />
           </div>

@@ -1,17 +1,41 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { JobQueue } from '@/components/crawl-manager/job-queue'
 import { JobControls } from '@/components/crawl-manager/job-controls'
 import { JobHistory } from '@/components/crawl-manager/job-history'
-import { generateMockCrawlJobs } from '@/lib/mock-data'
-import { CrawlJobStatus } from '@/lib/types'
+import { CrawlJob, CrawlJobStatus } from '@/lib/types'
+import { cancelCrawlJob, createCrawlJob, fetchCrawlJobs, pauseCrawlJob } from '@/lib/backend-data'
 
 export default function CrawlManagerPage() {
-  const [jobs, setJobs] = useState(() => generateMockCrawlJobs())
+  const [jobs, setJobs] = useState<CrawlJob[]>([])
   const [isCreatingJob, setIsCreatingJob] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadJobs = async () => {
+    try {
+      setError(null)
+      const data = await fetchCrawlJobs()
+      setJobs(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load crawl jobs.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadJobs()
+
+    const timer = setInterval(() => {
+      loadJobs()
+    }, 10000)
+
+    return () => clearInterval(timer)
+  }, [])
 
   const activeJobs = useMemo(() => {
     return jobs.filter((j) => j.status === CrawlJobStatus.RUNNING)
@@ -26,66 +50,56 @@ export default function CrawlManagerPage() {
   }, [jobs])
 
   const handleStartCrawl = async (config: any) => {
-    // Create new job
-    const newJob = {
-      id: `job-${Date.now()}`,
-      status: CrawlJobStatus.RUNNING as const,
-      startedAt: new Date().toISOString(),
-      articlesFound: 0,
-      errors: 0,
-      progress: 0,
+    try {
+      const sourceMap: Record<string, 'daily_star' | 'prothom_alo' | 'both'> = {
+        all: 'both',
+        news: 'both',
+        blogs: 'prothom_alo',
+        social: 'daily_star',
+      }
+
+      const dateTo = new Date()
+      const dateFrom = new Date()
+      dateFrom.setDate(dateTo.getDate() - 7)
+
+      await createCrawlJob(
+        sourceMap[config.sources] ?? 'both',
+        dateFrom.toISOString().split('T')[0],
+        dateTo.toISOString().split('T')[0],
+      )
+      setIsCreatingJob(false)
+      await loadJobs()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create crawl job.')
     }
-
-    setJobs((prev) => [newJob, ...prev])
-    setIsCreatingJob(false)
-
-    // Simulate job progress
-    const progressInterval = setInterval(() => {
-      setJobs((prev) =>
-        prev.map((job) => {
-          if (job.id === newJob.id) {
-            const newProgress = (job.progress || 0) + Math.random() * 20
-            if (newProgress >= 100) {
-              clearInterval(progressInterval)
-              return {
-                ...job,
-                progress: 100,
-                status: CrawlJobStatus.COMPLETED,
-                completedAt: new Date().toISOString(),
-                articlesFound: Math.floor(Math.random() * 100) + 20,
-                errors: Math.floor(Math.random() * 3),
-              }
-            }
-            return {
-              ...job,
-              progress: newProgress,
-              articlesFound: Math.floor(newProgress * 0.5),
-            }
-          }
-          return job
-        })
-      )
-    }, 1000)
   }
 
-  const handlePauseJob = (jobId: string) => {
-    setJobs((prev) =>
-      prev.map((job) =>
-        job.id === jobId ? { ...job, status: CrawlJobStatus.PENDING } : job
-      )
-    )
+  const handlePauseJob = async (jobId: string) => {
+    try {
+      await pauseCrawlJob(jobId)
+      await loadJobs()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to pause job.')
+    }
   }
 
-  const handleCancelJob = (jobId: string) => {
-    setJobs((prev) =>
-      prev.map((job) =>
-        job.id === jobId ? { ...job, status: CrawlJobStatus.FAILED, errors: 1 } : job
-      )
-    )
+  const handleCancelJob = async (jobId: string) => {
+    try {
+      await cancelCrawlJob(jobId)
+      await loadJobs()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel job.')
+    }
   }
 
   return (
     <div className="space-y-6 p-6">
+      {error && (
+        <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          {error}
+        </Card>
+      )}
+
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-blue-500/10 border border-blue-500/20 p-6">
@@ -132,7 +146,7 @@ export default function CrawlManagerPage() {
       )}
 
       {/* Active Jobs Queue */}
-      {activeJobs.length > 0 && (
+      {!isLoading && activeJobs.length > 0 && (
         <JobQueue
           jobs={activeJobs}
           onPause={handlePauseJob}
@@ -141,9 +155,15 @@ export default function CrawlManagerPage() {
       )}
 
       {/* Job History */}
-      <JobHistory
-        jobs={jobs.filter((j) => j.status !== CrawlJobStatus.RUNNING)}
-      />
+      {isLoading ? (
+        <Card className="bg-card border-border p-6">
+          <p className="text-sm text-muted-foreground">Loading crawl jobs...</p>
+        </Card>
+      ) : (
+        <JobHistory
+          jobs={jobs.filter((j) => j.status !== CrawlJobStatus.RUNNING)}
+        />
+      )}
     </div>
   )
 }
