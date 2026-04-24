@@ -67,25 +67,35 @@ function normalizeTokens(payload: Record<string, unknown>, emailFallback?: strin
   }
 }
 
-async function postToBackend(path: string, body: Record<string, unknown>) {
+async function postToBackend(path: string | string[], body: Record<string, unknown>) {
   const apiUrl = getApiUrl()
 
   if (!apiUrl) {
     return null
   }
 
-  const response = await fetch(`${apiUrl.replace(/\/$/, '')}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  })
+  const paths = Array.isArray(path) ? path : [path]
 
-  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
+  for (const candidatePath of paths) {
+    const response = await fetch(`${apiUrl.replace(/\/$/, '')}${candidatePath}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    })
 
-  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
+
+    if (response.ok) {
+      return payload
+    }
+
+    if (response.status === 404 || response.status === 405) {
+      continue
+    }
+
     const message =
       typeof payload.detail === 'string'
         ? payload.detail
@@ -96,7 +106,7 @@ async function postToBackend(path: string, body: Record<string, unknown>) {
     throw new Error(message)
   }
 
-  return payload
+  return null
 }
 
 export async function loginWithCredentials(email: string, password: string) {
@@ -104,7 +114,10 @@ export async function loginWithCredentials(email: string, password: string) {
     throw new Error('Email and password are required.')
   }
 
-  const payload = await postToBackend('/auth/login/', { email, password })
+  const payload = await postToBackend(
+    ['/api/v1/auth/token/', '/auth/login/'],
+    { email, username: email, password },
+  )
 
   if (!payload) {
     return {
@@ -128,7 +141,7 @@ export async function refreshAccessToken(refreshToken: string) {
     throw new Error('Missing refresh token.')
   }
 
-  const payload = await postToBackend('/auth/token/refresh/', { refresh: refreshToken })
+  const payload = await postToBackend(['/api/v1/auth/token/refresh/', '/auth/token/refresh/'], { refresh: refreshToken })
 
   if (!payload) {
     return {
@@ -149,7 +162,7 @@ export async function refreshAccessToken(refreshToken: string) {
 }
 
 export async function registerUser(payload: RegisterPayload) {
-  const backendPayload = await postToBackend('/auth/register/', {
+  const backendPayload = await postToBackend(['/api/v1/auth/register/', '/auth/register/'], {
     full_name: payload.fullName,
     email: payload.email,
     password: payload.password,

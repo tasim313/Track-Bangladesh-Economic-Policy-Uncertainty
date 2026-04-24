@@ -1,18 +1,19 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { signIn } from 'next-auth/react'
 import { toast } from 'sonner'
 import { Loader2, LockKeyhole, Mail } from 'lucide-react'
 import { AuthShell } from '@/components/auth/auth-shell'
-import { GoogleSignInButton } from '@/components/auth/google-signin-button'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { useAuthStore } from '@/stores/auth-store'
 
 const schema = z.object({
   email: z.string().email('Enter a valid email address.'),
@@ -22,7 +23,17 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading sign-in form...</div>}>
+      <SignInContent />
+    </Suspense>
+  )
+}
+
+function SignInContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
+  const setAuth = useAuthStore((state) => state.setAuth)
   const callbackUrl = searchParams.get('callbackUrl') ?? '/'
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -33,26 +44,59 @@ export default function SignInPage() {
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const result = await signIn('credentials', {
-      email: values.email,
-      password: values.password,
-      redirect: false,
-      callbackUrl,
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
+    const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/auth/token/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: values.email,
+        username: values.email,
+        password: values.password,
+      }),
     })
 
-    if (result?.error) {
-      toast.error(result.error)
+    const payload = (await response.json().catch(() => ({}))) as {
+      access?: string
+      refresh?: string
+      detail?: string
+      message?: string
+      expires_in?: number
+      access_expires_in?: number
+      user?: { id?: string; email?: string; name?: string; full_name?: string }
+    }
+
+    if (!response.ok || !payload.access) {
+      toast.error(payload.detail ?? payload.message ?? 'Invalid email or password.')
       return
     }
 
+    const expiresIn = Number(payload.expires_in ?? payload.access_expires_in ?? 1800)
+    setAuth({
+      accessToken: payload.access,
+      refreshToken: payload.refresh,
+      accessTokenExpires: Date.now() + expiresIn * 1000,
+      user: payload.user
+        ? {
+            id: payload.user.id,
+            email: payload.user.email ?? values.email,
+            name: payload.user.name,
+            fullName: payload.user.full_name,
+          }
+        : {
+            email: values.email,
+            name: values.email.split('@')[0],
+            fullName: values.email.split('@')[0],
+          },
+    })
+
     toast.success('Signed in successfully.')
-    window.location.href = callbackUrl
+    router.push(callbackUrl)
   })
 
   return (
     <AuthShell
       title="Welcome back"
-      description="Sign in with credentials or Google to reach the protected research dashboard."
+      description="Sign in with your backend credentials to reach the protected research dashboard."
       footer={
         <p className="text-sm text-muted-foreground">
           New here?{' '}
@@ -108,13 +152,6 @@ export default function SignInPage() {
         </form>
       </Form>
 
-      <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-muted-foreground">
-        <div className="h-px flex-1 bg-border" />
-        Or
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <GoogleSignInButton />
     </AuthShell>
   )
 }

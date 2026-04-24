@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { CalendarRange, CheckCircle2, Languages, Link2, Loader2, Orbit, UploadCloud } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -59,6 +60,7 @@ function parseUrls(raw: string) {
 }
 
 export function IngestionPanel() {
+  const accessToken = useAuthStore((state) => state.accessToken)
   const mode = useUIStore((state) => state.ingestionMode)
   const setMode = useUIStore((state) => state.setIngestionMode)
   const [sources, setSources] = useState<Record<'prothom-alo' | 'daily-star', boolean>>({
@@ -80,6 +82,7 @@ export function IngestionPanel() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify(payload),
       })

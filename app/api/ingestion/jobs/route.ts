@@ -1,7 +1,5 @@
-import { getServerSession } from 'next-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { authOptions } from '@/lib/auth'
 
 const schema = z.discriminatedUnion('mode', [
   z.object({
@@ -19,12 +17,6 @@ const schema = z.discriminatedUnion('mode', [
 ])
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-
-  if (!session) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-  }
-
   const body = await request.json().catch(() => null)
   const parsed = schema.safeParse(body)
 
@@ -36,14 +28,58 @@ export async function POST(request: NextRequest) {
   }
 
   const payload = parsed.data
+  const authorization = request.headers.get('authorization')
+
+  const apiUrl = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL
+  if (!apiUrl) {
+    return NextResponse.json({ message: 'Backend API URL is not configured.' }, { status: 500 })
+  }
+
+  if (payload.mode === 'bulk') {
+    return NextResponse.json(
+      { message: 'Bulk mode is not available on the backend yet.' },
+      { status: 400 },
+    )
+  }
+
+  const source =
+    payload.sources.length === 2
+      ? 'both'
+      : payload.sources[0] === 'prothom-alo'
+        ? 'prothom_alo'
+        : 'daily_star'
+
+  const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/jobs/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authorization ? { Authorization: authorization } : {}),
+    },
+    body: JSON.stringify({
+      source,
+      date_from: `${payload.startYear}-01-01`,
+      date_to: `${payload.endYear}-12-31`,
+    }),
+    cache: 'no-store',
+  })
+
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
+
+  if (!response.ok) {
+    const message =
+      typeof data.detail === 'string'
+        ? data.detail
+        : typeof data.message === 'string'
+          ? data.message
+          : 'Unable to queue crawl job.'
+
+    return NextResponse.json({ message }, { status: response.status })
+  }
 
   return NextResponse.json({
-    id: crypto.randomUUID(),
+    id: data.id ?? crypto.randomUUID(),
     queuedAt: new Date().toISOString(),
-    mode: payload.mode,
-    message:
-      payload.mode === 'standard'
-        ? `Queued ${payload.sources.length} standard sources for ${payload.startYear}-${payload.endYear}.`
-        : `Queued ${payload.urls.length} external evidence links.`,
+    mode: 'standard',
+    message: `Queued crawl job for ${payload.startYear}-${payload.endYear}.`,
   })
 }

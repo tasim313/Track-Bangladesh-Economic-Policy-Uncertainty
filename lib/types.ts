@@ -26,6 +26,7 @@ export interface Article {
 export enum CrawlJobStatus {
   PENDING = 'pending',
   RUNNING = 'running',
+  PAUSED = 'paused',
   COMPLETED = 'completed',
   FAILED = 'failed',
 }
@@ -74,4 +75,23 @@ export interface EPUAnalyticsData {
   politicalValue: number
   uncertaintyValue: number
   articlesCount: number
+}
+
+export interface KeywordArticleCountRow {
+  date: string
+  source: string
+  sourceKeyword: string
+  articleCount: number
+}
+
+export interface NewsSource {
+  id: number
+  name: string
+  url: string
+  country: string
+  region: 'bangladesh' | 'usa' | 'uk' | 'australia' | 'canada' | 'new_zealand' | 'worldwide'
+  language: 'en' | 'bn'
+  is_active: boolean
+  created_at: string
+  updated_at: string
 }

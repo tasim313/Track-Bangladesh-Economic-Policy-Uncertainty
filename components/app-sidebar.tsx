@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Database, Home, Settings, Workflow, KeyRound, MoonStar, SunMedium } from 'lucide-react'
-import { signOut, useSession } from 'next-auth/react'
+import { BarChart3, Database, Home, Settings, Workflow, KeyRound, MoonStar, SunMedium, LineChart } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import {
   Sidebar,
@@ -20,18 +20,22 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/stores/auth-store'
 
 const navItems = [
   { title: 'Dashboard', href: '/', icon: Home },
   { title: 'Crawl Manager', href: '/crawl', icon: Workflow },
   { title: 'Data Explorer', href: '/data', icon: Database },
+  { title: 'Analytics', href: '/analytics', icon: LineChart },
   { title: 'Keywords', href: '/keywords', icon: KeyRound },
   { title: 'Settings', href: '/settings', icon: Settings },
 ]
 
 export function AppSidebar() {
+  const router = useRouter()
   const pathname = usePathname()
-  const { data: session } = useSession()
+  const user = useAuthStore((state) => state.user)
+  const clearAuth = useAuthStore((state) => state.clearAuth)
   const { resolvedTheme, setTheme } = useTheme()
 
   return (
@@ -73,8 +77,8 @@ export function AppSidebar() {
 
       <SidebarFooter className="gap-4 border-t border-sidebar-border/70 p-4">
         <div className="rounded-2xl bg-sidebar-accent/70 p-3 group-data-[collapsible=icon]:hidden">
-          <p className="truncate text-sm font-medium">{session?.user.fullName ?? session?.user.name ?? 'Researcher'}</p>
-          <p className="truncate text-xs text-sidebar-foreground/60">{session?.user.email}</p>
+          <p className="truncate text-sm font-medium">{user?.fullName ?? user?.name ?? 'Researcher'}</p>
+          <p className="truncate text-xs text-sidebar-foreground/60">{user?.email ?? 'No email'}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -86,7 +90,15 @@ export function AppSidebar() {
           >
             {resolvedTheme === 'dark' ? <SunMedium className="size-4" /> : <MoonStar className="size-4" />}
           </Button>
-          <Button type="button" variant="outline" className="flex-1" onClick={() => signOut({ callbackUrl: '/auth/signin' })}>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => {
+              clearAuth()
+              router.replace('/auth/signin')
+            }}
+          >
             Sign out
           </Button>
         </div>

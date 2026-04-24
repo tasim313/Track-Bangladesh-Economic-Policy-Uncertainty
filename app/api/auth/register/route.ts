@@ -19,6 +19,18 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const result = await registerUser(parsed.data)
-  return NextResponse.json(result)
+  try {
+    const result = await registerUser(parsed.data)
+    return NextResponse.json(result)
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to register user.',
+      },
+      { status: 400 },
+    )
+  }
 }

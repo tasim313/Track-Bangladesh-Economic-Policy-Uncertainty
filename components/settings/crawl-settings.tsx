@@ -36,7 +36,7 @@ export function CrawlSettings() {
             </label>
             <Input
               type="number"
-              value="500"
+              defaultValue="500"
               className="bg-secondary/50 border-border text-foreground"
             />
           </div>
@@ -47,7 +47,7 @@ export function CrawlSettings() {
             </label>
             <Input
               type="number"
-              value="60"
+              defaultValue="60"
               className="bg-secondary/50 border-border text-foreground"
             />
           </div>

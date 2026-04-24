@@ -24,7 +24,7 @@ export function DataRetention() {
           <div className="flex gap-3">
             <Input
               type="number"
-              value="90"
+              defaultValue="90"
               className="bg-secondary/50 border-border text-foreground"
               placeholder="Days"
             />
@@ -49,7 +49,7 @@ export function DataRetention() {
           <div className="flex gap-3">
             <Input
               type="number"
-              value="30"
+              defaultValue="30"
               className="bg-secondary/50 border-border text-foreground"
               placeholder="Days"
             />

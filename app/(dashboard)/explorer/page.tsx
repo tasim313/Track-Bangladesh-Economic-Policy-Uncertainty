@@ -1,22 +1,52 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ArticleTable } from '@/components/explorer/article-table'
 import { FilterPanel } from '@/components/explorer/filter-panel'
-import { generateMockArticles } from '@/lib/mock-data'
-import { KeywordCategory } from '@/lib/types'
+import { fetchArticles } from '@/lib/backend-data'
+import { Article, KeywordCategory } from '@/lib/types'
 import { Search, X } from 'lucide-react'
 
 export default function ExplorerPage() {
-  const allArticles = useMemo(() => generateMockArticles(), [])
+  const [allArticles, setAllArticles] = useState<Article[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<KeywordCategory[]>([])
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const rows = await fetchArticles()
+        if (mounted) {
+          setAllArticles(rows)
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load articles.')
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // Filter articles based on search and filters
   const filteredArticles = useMemo(() => {
@@ -72,6 +102,12 @@ export default function ExplorerPage() {
 
   return (
     <div className="space-y-6 p-6">
+      {error && (
+        <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          {error}
+        </Card>
+      )}
+
       {/* Header with Search */}
       <Card className="bg-card border-border p-6">
         <h2 className="text-xl font-semibold text-foreground mb-4">Search Articles</h2>
@@ -136,7 +172,13 @@ export default function ExplorerPage() {
             </div>
 
             {/* Table */}
-            <ArticleTable articles={paginatedArticles} />
+            {isLoading ? (
+              <div className="px-6 py-12 text-center">
+                <p className="text-muted-foreground">Loading articles...</p>
+              </div>
+            ) : (
+              <ArticleTable articles={paginatedArticles} />
+            )}
 
             {/* Pagination */}
             <div className="px-6 py-4 border-t border-border flex items-center justify-between">
