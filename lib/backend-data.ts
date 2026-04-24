@@ -89,6 +89,14 @@ type KeywordArticleCountResponse = {
   article_count: number
 }
 
+type DateRange = {
+  dateFrom: string
+  dateTo: string
+}
+
+const ACADEMIC_START_DATE = '2010-01-01'
+const ACADEMIC_END_DATE = '2025-12-31'
+
 function toNumber(value: unknown, fallback = 0) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
@@ -120,14 +128,19 @@ function mapKeywordCategory(name: string): KeywordCategory {
   return KeywordCategory.UNCERTAINTY
 }
 
-export async function fetchDailyEpuData(days = 30): Promise<EPUDataPoint[]> {
-  const dateTo = new Date()
-  const dateFrom = new Date()
-  dateFrom.setDate(dateTo.getDate() - days)
+function getAcademicRange(): DateRange {
+  return {
+    dateFrom: ACADEMIC_START_DATE,
+    dateTo: ACADEMIC_END_DATE,
+  }
+}
+
+export async function fetchDailyEpuData(range?: DateRange): Promise<EPUDataPoint[]> {
+  const resolvedRange = range ?? getAcademicRange()
 
   const params = new URLSearchParams({
-    date_from: dateFrom.toISOString().split('T')[0],
-    date_to: dateTo.toISOString().split('T')[0],
+    date_from: resolvedRange.dateFrom,
+    date_to: resolvedRange.dateTo,
   })
 
   const mapRowsToPoints = (data: DailyScoreResponse[]) =>
@@ -328,12 +341,14 @@ export async function fetchAnalyticsSummary(): Promise<AnalyticsSummaryResponse>
   return (await response.json()) as AnalyticsSummaryResponse
 }
 
-export async function fetchKeywordArticleCounts(limit = 200): Promise<KeywordArticleCountRow[]> {
-  const params = new URLSearchParams({
-    limit: String(limit),
-  })
+export async function fetchKeywordArticleCounts(limit?: number): Promise<KeywordArticleCountRow[]> {
+  const params = new URLSearchParams()
+  if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
+    params.set('limit', String(Math.floor(limit)))
+  }
 
-  const response = await apiFetch(`/api/v1/analytics/keyword-article-counts/?${params.toString()}`)
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const response = await apiFetch(`/api/v1/analytics/keyword-article-counts/${suffix}`)
   if (!response.ok) {
     throw new Error('Unable to load source keyword counts.')
   }

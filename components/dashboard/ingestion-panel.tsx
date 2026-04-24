@@ -16,7 +16,9 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-const YEARS = Array.from({ length: 15 }, (_, index) => 2010 + index)
+const BASE_YEAR = 2010
+const ACADEMIC_END_YEAR = 2025
+const YEARS = Array.from({ length: ACADEMIC_END_YEAR - BASE_YEAR + 1 }, (_, index) => BASE_YEAR + index).reverse()
 
 function normalizeUrl(raw: string) {
   try {
@@ -67,8 +69,8 @@ export function IngestionPanel() {
     'prothom-alo': true,
     'daily-star': true,
   })
-  const [startYear, setStartYear] = useState('2010')
-  const [endYear, setEndYear] = useState('2024')
+  const [startYear, setStartYear] = useState(String(BASE_YEAR))
+  const [endYear, setEndYear] = useState(String(ACADEMIC_END_YEAR))
   const [language, setLanguage] = useState<'bangla' | 'english' | 'mixed'>('mixed')
   const [frequency, setFrequency] = useState<'daily' | 'monthly'>('monthly')
   const [rawUrls, setRawUrls] = useState('')
@@ -364,7 +366,7 @@ export function IngestionPanel() {
               title: 'Mode A',
               subtitle: 'Systematic academic crawl',
               tone: 'from-[#3b82f6]/10 via-[#22c55e]/10 to-transparent',
-              points: ['One-click Prothom Alo and Daily Star presets', 'Date range constrained to 2010 to 2024', 'Daily or monthly archive cadence'],
+              points: ['One-click Prothom Alo and Daily Star presets', 'Date range constrained to 2010 to 2025', 'Daily or monthly archive cadence'],
             },
             {
               title: 'Mode B',

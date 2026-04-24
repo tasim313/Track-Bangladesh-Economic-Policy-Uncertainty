@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
+const MIN_YEAR = 2010
+const MAX_YEAR = 2025
+
 const schema = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('standard'),
     sources: z.array(z.enum(['prothom-alo', 'daily-star'])).min(1),
-    startYear: z.number().min(2010).max(2024),
-    endYear: z.number().min(2010).max(2024),
+    startYear: z.number().int().min(MIN_YEAR).max(MAX_YEAR),
+    endYear: z.number().int().min(MIN_YEAR).max(MAX_YEAR),
     language: z.enum(['bangla', 'english', 'mixed']),
     frequency: z.enum(['daily', 'monthly']),
   }),
@@ -29,6 +32,10 @@ export async function POST(request: NextRequest) {
 
   const payload = parsed.data
   const authorization = request.headers.get('authorization')
+
+  if (payload.mode === 'standard' && payload.startYear > payload.endYear) {
+    return NextResponse.json({ message: 'The start year must be before the end year.' }, { status: 400 })
+  }
 
   const apiUrl = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL
   if (!apiUrl) {

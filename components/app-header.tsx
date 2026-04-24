@@ -65,7 +65,7 @@ export function AppHeader() {
           </div>
           <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
             <CalendarDays className="size-4" />
-            Academic window: 2010 to 2024
+            Academic window: 2010 to 2025
           </div>
         </div>
       </div>
