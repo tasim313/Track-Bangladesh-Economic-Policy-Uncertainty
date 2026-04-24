@@ -6,13 +6,23 @@ import { Card } from '@/components/ui/card'
 import { TrendChart } from '@/components/analytics/trend-chart'
 import { ComparisonChart } from '@/components/analytics/comparison-chart'
 import { StatisticsPanel } from '@/components/analytics/statistics-panel'
-import { fetchDailyEpuData, fetchKeywordArticleCounts } from '@/lib/backend-data'
+import { fetchDailyEpuData, fetchKeywordArticleCounts, fetchKeywordCategories } from '@/lib/backend-data'
 import { EPUDataPoint, KeywordArticleCountRow } from '@/lib/types'
 import { Download, TrendingUp } from 'lucide-react'
+
+type KeywordCategoryRow = {
+  name: string
+  language: 'en' | 'bn'
+  keywords: string[]
+}
 
 export default function AnalyticsPage() {
   const [epuData, setEpuData] = useState<EPUDataPoint[]>([])
   const [keywordRows, setKeywordRows] = useState<KeywordArticleCountRow[]>([])
+  const [keywordCategories, setKeywordCategories] = useState<KeywordCategoryRow[]>([])
+  const [selectedYear, setSelectedYear] = useState('all')
+  const [selectedMonth, setSelectedMonth] = useState('all')
+  const [selectedDay, setSelectedDay] = useState('all')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,13 +33,21 @@ export default function AnalyticsPage() {
       try {
         setIsLoading(true)
         setError(null)
-        const [data, keywordData] = await Promise.all([
-          fetchDailyEpuData(30),
-          fetchKeywordArticleCounts(200),
+        const [data, keywordData, categories] = await Promise.all([
+          fetchDailyEpuData(),
+          fetchKeywordArticleCounts(),
+          fetchKeywordCategories(),
         ])
         if (mounted) {
           setEpuData(data)
           setKeywordRows(keywordData)
+          setKeywordCategories(
+            categories.map((item) => ({
+              name: item.name,
+              language: item.language as 'en' | 'bn',
+              keywords: item.keywords,
+            })),
+          )
         }
       } catch (err) {
         if (mounted) {
@@ -47,6 +65,123 @@ export default function AnalyticsPage() {
       mounted = false
     }
   }, [])
+
+  const epuKeywordTable = useMemo(() => {
+    const categoryLabels = [
+      { key: 'economy', label: 'Economy (E)' },
+      { key: 'policy', label: 'Policy (P)' },
+      { key: 'uncertainty', label: 'Uncertainty (U)' },
+    ]
+
+    const fallbackKeywords: Record<string, { en: string[]; bn: string[] }> = {
+      economy: {
+        en: ['economy', 'economic', 'GDP', 'growth', 'inflation', 'fiscal', 'monetary', 'trade', 'export', 'import', 'revenue', 'budget'],
+        bn: ['অর্থনীতি', 'আর্থিক', 'কর', 'বাজেট', 'রাজস্ব', 'বাণিজ্য'],
+      },
+      policy: {
+        en: ['policy', 'regulation', 'government', 'parliament', 'central bank', 'Bangladesh Bank', 'minister', 'legislation', 'law', 'reform', 'tariff'],
+        bn: ['সরকার', 'নীতি', 'বাংলাদেশ ব্যাংক', 'মন্ত্রী', 'সরকারি', 'আইন', 'সংসদ'],
+      },
+      uncertainty: {
+        en: ['uncertain', 'uncertainty', 'unclear', 'unpredictable', 'ambiguous', 'risk', 'volatile', 'unstable', 'concern', 'fear', 'doubt'],
+        bn: ['অনিশ্চয়তা', 'সন্দেহ', 'ঝুঁকি', 'অস্থিতিশীল', 'ভয়', 'শঙ্কা'],
+      },
+    }
+
+    const byKey = new Map<string, { en: string[]; bn: string[] }>()
+    for (const item of keywordCategories) {
+      const key = item.name.trim().toLowerCase()
+      if (!byKey.has(key)) {
+        byKey.set(key, { en: [], bn: [] })
+      }
+      const row = byKey.get(key)!
+      if (item.language === 'bn') {
+        row.bn = item.keywords
+      } else {
+        row.en = item.keywords
+      }
+    }
+
+    return categoryLabels.map((item) => {
+      const row = byKey.get(item.key) ?? fallbackKeywords[item.key]
+      return {
+        category: item.label,
+        english: row.en,
+        bangla: row.bn,
+      }
+    })
+  }, [keywordCategories])
+
+  const keywordCategoryMap = useMemo(() => {
+    const map = new Map<string, string>()
+
+    for (const row of epuKeywordTable) {
+      const categoryCode = row.category.includes('(E)')
+        ? 'E'
+        : row.category.includes('(P)')
+          ? 'P'
+          : row.category.includes('(U)')
+            ? 'U'
+            : 'Unknown'
+
+      for (const keyword of [...row.english, ...row.bangla]) {
+        map.set(keyword.trim().toLowerCase(), categoryCode)
+      }
+    }
+
+    return map
+  }, [epuKeywordTable])
+
+  const datePartsRows = useMemo(
+    () =>
+      keywordRows
+        .map((row) => {
+          const parts = row.date.split('-')
+          if (parts.length !== 3) {
+            return null
+          }
+          return {
+            ...row,
+            year: parts[0],
+            month: parts[1],
+            day: parts[2],
+          }
+        })
+        .filter((row): row is KeywordArticleCountRow & { year: string; month: string; day: string } => row !== null),
+    [keywordRows],
+  )
+
+  const yearOptions = useMemo(
+    () => Array.from(new Set(datePartsRows.map((row) => row.year))).sort((a, b) => b.localeCompare(a)),
+    [datePartsRows],
+  )
+
+  const monthOptions = useMemo(() => {
+    const rows = selectedYear === 'all' ? datePartsRows : datePartsRows.filter((row) => row.year === selectedYear)
+    return Array.from(new Set(rows.map((row) => row.month))).sort((a, b) => a.localeCompare(b))
+  }, [datePartsRows, selectedYear])
+
+  const dayOptions = useMemo(() => {
+    let rows = datePartsRows
+    if (selectedYear !== 'all') {
+      rows = rows.filter((row) => row.year === selectedYear)
+    }
+    if (selectedMonth !== 'all') {
+      rows = rows.filter((row) => row.month === selectedMonth)
+    }
+    return Array.from(new Set(rows.map((row) => row.day))).sort((a, b) => a.localeCompare(b))
+  }, [datePartsRows, selectedYear, selectedMonth])
+
+  const filteredKeywordRows = useMemo(
+    () =>
+      datePartsRows.filter((row) => {
+        if (selectedYear !== 'all' && row.year !== selectedYear) return false
+        if (selectedMonth !== 'all' && row.month !== selectedMonth) return false
+        if (selectedDay !== 'all' && row.day !== selectedDay) return false
+        return true
+      }),
+    [datePartsRows, selectedYear, selectedMonth, selectedDay],
+  )
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -105,14 +240,14 @@ export default function AnalyticsPage() {
       return text
     }
 
-    const header = ['Date', 'Source', 'Source Keyword', 'Article Count']
+    const header = ['Date', 'Source', 'Source Keyword, Category', 'Article Count']
     const lines = [
-      header.join(','),
+      header.map((col) => escapeCsv(col)).join(','),
       ...keywordRows.map((row) =>
         [
           escapeCsv(row.date),
           escapeCsv(row.source === 'prothom_alo' ? 'Prothom Alo' : row.source === 'daily_star' ? 'Daily Star' : row.source),
-          escapeCsv(row.sourceKeyword),
+          escapeCsv(`${row.sourceKeyword}, ${keywordCategoryMap.get(row.sourceKeyword.trim().toLowerCase()) ?? 'Unknown'}`),
           escapeCsv(row.articleCount),
         ].join(','),
       ),
@@ -141,7 +276,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Analytics Dashboard</h1>
-          <p className="text-muted-foreground">30-day economic policy uncertainty analysis</p>
+          <p className="text-muted-foreground">Academic window analysis (2010-2025)</p>
         </div>
         <Button
           className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
@@ -152,6 +287,105 @@ export default function AnalyticsPage() {
           Download CSV
         </Button>
       </div>
+
+      <Card className="bg-card border-border p-6">
+        <h3 className="text-lg font-semibold text-foreground mb-2">Output Table</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Date, Source, Source Keyword, Category, Article Count
+        </p>
+
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <select
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+            value={selectedYear}
+            onChange={(e) => {
+              setSelectedYear(e.target.value)
+              setSelectedMonth('all')
+              setSelectedDay('all')
+            }}
+          >
+            <option value="all">All Years</option>
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+            value={selectedMonth}
+            onChange={(e) => {
+              setSelectedMonth(e.target.value)
+              setSelectedDay('all')
+            }}
+          >
+            <option value="all">All Months</option>
+            {monthOptions.map((month) => (
+              <option key={month} value={month}>
+                {month}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+            value={selectedDay}
+            onChange={(e) => setSelectedDay(e.target.value)}
+          >
+            <option value="all">All Days</option>
+            {dayOptions.map((day) => (
+              <option key={day} value={day}>
+                {day}
+              </option>
+            ))}
+          </select>
+
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSelectedYear('all')
+              setSelectedMonth('all')
+              setSelectedDay('all')
+            }}
+          >
+            Reset Filters
+          </Button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="py-2 text-left">Date</th>
+                <th className="py-2 text-left">Source</th>
+                <th className="py-2 text-left">Source Keyword, Category</th>
+                <th className="py-2 text-left">Article Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredKeywordRows.length === 0 ? (
+                <tr>
+                  <td className="py-3 text-muted-foreground" colSpan={4}>
+                    No rows found for the selected year/month/day filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredKeywordRows.map((row, index) => (
+                  <tr key={`top-${row.date}-${row.source}-${row.sourceKeyword}-${index}`} className="border-b border-border/60">
+                    <td className="py-2">{row.date}</td>
+                    <td className="py-2">{row.source === 'prothom_alo' ? 'Prothom Alo' : row.source === 'daily_star' ? 'Daily Star' : row.source}</td>
+                    <td className="py-2">
+                      {row.sourceKeyword}, {keywordCategoryMap.get(row.sourceKeyword.trim().toLowerCase()) ?? 'Unknown'}
+                    </td>
+                    <td className="py-2">{row.articleCount}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {/* Overview Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -164,19 +398,19 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card className="bg-card border-border p-6">
-          <p className="text-xs text-muted-foreground mb-2">Average (30d)</p>
+          <p className="text-xs text-muted-foreground mb-2">Average (2010-2025)</p>
           <p className="text-3xl font-bold text-foreground">{stats.avg.toFixed(2)}</p>
           <p className="text-xs text-muted-foreground mt-2">Mean EPU index</p>
         </Card>
 
         <Card className="bg-card border-border p-6">
-          <p className="text-xs text-muted-foreground mb-2">Peak (30d)</p>
+          <p className="text-xs text-muted-foreground mb-2">Peak (2010-2025)</p>
           <p className="text-3xl font-bold text-orange-400">{stats.max.toFixed(2)}</p>
           <p className="text-xs text-muted-foreground mt-2">Highest recorded</p>
         </Card>
 
         <Card className="bg-card border-border p-6">
-          <p className="text-xs text-muted-foreground mb-2">Low (30d)</p>
+          <p className="text-xs text-muted-foreground mb-2">Low (2010-2025)</p>
           <p className="text-3xl font-bold text-emerald-400">{stats.min.toFixed(2)}</p>
           <p className="text-xs text-muted-foreground mt-2">Lowest recorded</p>
         </Card>
@@ -283,38 +517,28 @@ export default function AnalyticsPage() {
       </Card>
 
       <Card className="bg-card border-border p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-2">Daily Source Keyword Counts</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-2">E/P/U Keyword Categories</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Output format from your data item: Date, Source, Source Keyword, Article Count.
+          Category-wise keywords used for EPU classification (English: The Daily Star, Bangla: Prothom Alo).
         </p>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto mb-8">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="py-2 text-left">Date</th>
-                <th className="py-2 text-left">Source</th>
-                <th className="py-2 text-left">Source Keyword</th>
-                <th className="py-2 text-left">Article Count</th>
+                <th className="py-2 text-left">Category</th>
+                <th className="py-2 text-left">English Keywords (The Daily Star)</th>
+                <th className="py-2 text-left">Bangla Keywords (Prothom Alo)</th>
               </tr>
             </thead>
             <tbody>
-              {keywordRows.length === 0 ? (
-                <tr>
-                  <td className="py-3 text-muted-foreground" colSpan={4}>
-                    No keyword count rows yet.
-                  </td>
+              {epuKeywordTable.map((row) => (
+                <tr key={row.category} className="border-b border-border/60 align-top">
+                  <td className="py-2 font-medium">{row.category}</td>
+                  <td className="py-2">{row.english.join(', ')}</td>
+                  <td className="py-2">{row.bangla.join(', ')}</td>
                 </tr>
-              ) : (
-                keywordRows.map((row, index) => (
-                  <tr key={`${row.date}-${row.source}-${row.sourceKeyword}-${index}`} className="border-b border-border/60">
-                    <td className="py-2">{row.date}</td>
-                    <td className="py-2">{row.source === 'prothom_alo' ? 'Prothom Alo' : row.source === 'daily_star' ? 'Daily Star' : row.source}</td>
-                    <td className="py-2">{row.sourceKeyword}</td>
-                    <td className="py-2">{row.articleCount}</td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
